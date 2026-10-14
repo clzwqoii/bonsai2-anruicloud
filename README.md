@@ -27,4 +27,8 @@ nohup "$B" -m /workspace/models/bonsai2.gguf \
 sleep 90; grep -iE "KV buffer|compute buffer|model size|overhead|n_ctx|flash" /workspace/server.log | tail -12
 
 curl -s http://127.0.0.1:18180/v1/models
+
+curl -s http://127.0.0.1:18180/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"bonsai2-v2","messages":[{"role":"user","content":"用一句话说明你是谁"}],"max_tokens":128}'
 ```
