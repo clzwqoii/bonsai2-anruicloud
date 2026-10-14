@@ -32,9 +32,9 @@ nohup "$B" -m /workspace/models/bonsai2.gguf \
 $HOME/.local/bin/rc-tunnel expose --port 18180
 
 
-curl -s http://127.0.0.1:18180/v1/models
+curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:18180/v1/models
 
-curl -s http://127.0.0.1:18180/v1/chat/completions \
-  -H 'Content-Type: application/json' \
+curl -s -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  http://127.0.0.1:18180/v1/chat/completions \
   -d '{"model":"bonsai2-v2","messages":[{"role":"user","content":"用一句话说明你是谁"}],"max_tokens":128}'
 ```
