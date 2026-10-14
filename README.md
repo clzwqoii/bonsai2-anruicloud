@@ -17,14 +17,20 @@ sleep 45; tail -25 /workspace/build.log
 ```bash
 # 期望 build 10772 / e8fd209c9
 B=/workspace/llama.cpp-prism/build/bin/llama-server; "$B" --version  
+KEY=$(openssl rand -hex 24); echo "$KEY"
 
 nohup "$B" -m /workspace/models/bonsai2.gguf \
-  -ngl 999 -fa on -c 131072 --parallel 1 \
+  -ngl 999 -fa on -c 262144 --parallel 1 \
   --spec-type draft-mtp --spec-draft-n-max 3 \
   --host 127.0.0.1 --port 18180 --alias bonsai2-v2 \
+  --api-key "$KEY" \
   --jinja --chat-template-kwargs '{"reasoning_effort":"medium"}' \
   > /workspace/server.log 2>&1 &
-sleep 90; grep -iE "KV buffer|compute buffer|model size|overhead|n_ctx|flash" /workspace/server.log | tail -12
+
+# 它返回一个 https://rc-<随机>.radeon.firstdg.ai。脚本报「identity 目录/FRP_BROKER_URL 不存在」= 这个 Pod 建得太早，那就只能重建 Notebook（/workspace 是持久盘，模型和编译产物都在，不用重来）
+/var/run/secrets/frp-self-service/install
+$HOME/.local/bin/rc-tunnel expose --port 18180
+
 
 curl -s http://127.0.0.1:18180/v1/models
 
