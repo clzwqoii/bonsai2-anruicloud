@@ -67,7 +67,7 @@ ssh root@36.150.116.206 -p 33436 'ls -lh /workspace/models/bonsai2.gguf 2>/dev/n
 ssh root@36.150.116.206 -p 33436 'bash -s' <<'REMOTE'
 pkill -x llama-server; sleep 1
 test -s /workspace/api.key || openssl rand -hex 24 > /workspace/api.key
-nohup /workspace/llama.cpp-prism/build/bin/llama-server -m /workspace/models/bonsai2.gguf -ngl 999 -fa on -c 131072 --parallel 1 --spec-type draft-mtp --spec-draft-n-max 3 --host 127.0.0.1 --port 18180 --alias bonsai2-v2 --api-key "$(cat /workspace/api.key)" --jinja --chat-template-kwargs '{"reasoning_effort":"medium"}' > /workspace/server.log 2>&1 &
+nohup /workspace/llama.cpp-prism/build/bin/llama-server -m /workspace/models/bonsai2.gguf -ngl 999 -fa on -c 262144 --parallel 1 --spec-type draft-mtp --spec-draft-n-max 3 --host 127.0.0.1 --port 18180 --alias bonsai2-v2 --api-key "$(cat /workspace/api.key)" --jinja --chat-template-kwargs '{"reasoning_effort":"medium"}' > /workspace/server.log 2>&1 &
 echo "srv_pid=$!"
 REMOTE
 sleep 120
