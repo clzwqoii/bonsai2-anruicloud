@@ -85,6 +85,16 @@ ssh root@36.150.116.206 -p 31548 'tail -3 /workspace/server.log; echo ---KEY---;
 
 `--mmproj /workspace/models/bonsai2-mmproj.gguf` = 视觉投影（让模型能看图）；启动日志出现 `loaded multimodal model, '...mmproj.gguf'` 才算加载成功。不要图片就删掉这个参数，文本不受影响。
 
+
+## ⑤ .1  webp 图片需要 ffmpeg
+**webp 图片需要 ffmpeg**（容器默认没有；jpg/png 不需要）。缺了它发 webp 报 `failed to launch ffprobe` + `failed to decode webp buffer`。装法（一次性的，实例重启后仍在；仅销毁重建后才要重装）：
+
+```bash
+ssh root@36.150.116.206 -p 31548 'export http_proxy=http://notebook-egress-proxy.amd-oneclick-lablab.svc.cluster.local:3128 https_proxy=$http_proxy; apt-get install -y -qq ffmpeg; which ffmpeg ffprobe'
+```
+
+装完必须**重启 llama-server**（ffmpeg 路径是启动时解析的）：重跑本节 ⑤ 的启动命令即可。
+
 ## ⑥ 修 sshd 转发开关（ssh -L 的前置，10 秒；实例重启后保险起见重跑）
 
 ```bash
@@ -139,6 +149,7 @@ curl -s -H "Authorization: Bearer $(cat ~/.radeon-api-key)" -H "Content-Type: ap
 - 隧道报 administratively prohibited → ⑥ 没做或已被重置，重跑 ⑥。
 - 客户端连不上先看 401 来源：Key 框空 / 隧道断了（重跑 ⑦）。
 - 发图报 `image input is not supported` → 启动命令没带 `--mmproj`（或实例没下 mmproj 文件），见 ⑤。
+- 发 **webp** 报 `failed to launch ffprobe` → 容器缺 ffmpeg，装法见 ⑤（装完要重启 llama-server）。jpg/png 无此问题。
 - 每次重启 llama-server 会清空前缀缓存：老会话的下一条消息要全量预填充（10 万 token 级会话约 5-7 分钟），属正常，不是卡死。
 - 长任务一律 `nohup … > log 2>&1 &`；下载断了 `curl -C -` 续传。
 - **长任务别放在客户端/交互连接里跑**：平台 SSH 网关会掐长时间不动的连接（实测约半小时），客户端断开 → llama-server 收到断连就把任务取消（日志 `cancel task`）→ 「跑到一半停了」。服务端长活（下载、编译）必须 nohup；客户端长对话被掐就等隧道自动重连后重发。
