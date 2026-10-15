@@ -2,7 +2,7 @@
 
 - 当前实例：`ssh root@36.150.116.206 -p 31548`（免密）。IP/端口随实例变，重建后从 Profile 页抄新的，替换本文所有出现处。
 - 全套已在本实例验证通过（2026-10-14；2026-10-15 追加 256K 上下文与图片输入 --mmproj）：/v1/models 返回 200 且 `ftype = PQ2_0`，客户端可连。
-- 实例重建（销毁重开）后 /workspace 大概率是空的 → ①→⑧ 全跑（约 15 分钟）。仅重启先 `ls /workspace`：有 `llama.cpp-prism/` + `models/bonsai2.gguf` + `models/bonsai2-mmproj.gguf` 就跳过 ①~④，从 ⑤ 开始。
+- 实例重建（销毁重开）后 /workspace 大概率是空的 → ①→⑧ 全跑（约 15 分钟）。**实例重启（非销毁）**：/workspace 数据保留，但 nohup 的服务全没、⑥ 的 sshd 配置被平台重置回 no、**SSH 端口和主机名也会变** → 只需重跑 ⑤⑥⑦（几分钟）。判断法：先 `ls /workspace`，有 `llama.cpp-prism/` + `models/bonsai2.gguf` + `models/bonsai2-mmproj.gguf` 就跳过 ①~④，从 ⑤ 开始；从 Profile 页抄新端口，替换本文所有出现处。
 - 本实例 /workspace 是 25G NFS 持久卷；llama-server 启动约 90 秒；全程在 Mac 终端执行。
 
 ## ① 启动模型下载（后台，约 2 分钟；主模型 7.2G + mmproj 629M 一起下）
@@ -101,13 +101,15 @@ REMOTE
 
 期望：`20:AllowTcpForwarding local` → `master=数字` → `RELOADED`。平台 sshd 读的是 `/tmp/amd-oneclick-sshd_config`（不是 /etc/ssh/sshd_config），默认 `AllowTcpForwarding no`，不改这步隧道会被 administratively prohibited 拒。命令幂等，重跑无害。
 
-## ⑦ Mac 挂隧道（新终端挂着别关；自带 5 次重试）
+## ⑦ Mac 挂隧道（常驻自动重连，挂一次不用管）
 
 ```bash
-pkill -f "18180:127.0.0.1:18180"; sleep 1; for i in 1 2 3 4 5; do ssh -f -N -o ExitOnForwardFailure=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -L 18180:127.0.0.1:18180 root@36.150.116.206 -p 31548 && { echo TUNNEL_UP; break; }; echo "retry $i"; sleep 3; done
+pkill -f "18180:127.0.0.1:181[80]"; sleep 1
+nohup bash -c 'while :; do ssh -N -o ExitOnForwardFailure=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 18180:127.0.0.1:18180 root@36.150.116.206 -p 31548; sleep 5; done' > /tmp/bonsai-tunnel.log 2>&1 &
+sleep 4; curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: Bearer $(cat ~/.radeon-api-key)" http://127.0.0.1:18180/v1/models
 ```
 
-期望：`TUNNEL_UP`。Mac 睡眠/断网后重跑这条。
+期望：`HTTP 200`（401 = ⑧ 的 `~/.radeon-api-key` 没准备好，先跑 ⑧ 第一条）。断网/Mac 睡眠恢复、实例重启后 ssh 断开，都会**每 5 秒自动重连**，不用手动重跑。想停隧道：`pkill -f "18180:127.0.0.1:181[80]"`；Mac 重启后重新跑本节；实例换了端口就改命令里的 `-p 31548`。日志在 `/tmp/bonsai-tunnel.log`。
 
 ## ⑧ 客户端 + 端到端验证
 
@@ -139,4 +141,6 @@ curl -s -H "Authorization: Bearer $(cat ~/.radeon-api-key)" -H "Content-Type: ap
 - 发图报 `image input is not supported` → 启动命令没带 `--mmproj`（或实例没下 mmproj 文件），见 ⑤。
 - 每次重启 llama-server 会清空前缀缓存：老会话的下一条消息要全量预填充（10 万 token 级会话约 5-7 分钟），属正常，不是卡死。
 - 长任务一律 `nohup … > log 2>&1 &`；下载断了 `curl -C -` 续传。
+- **长任务别放在客户端/交互连接里跑**：平台 SSH 网关会掐长时间不动的连接（实测约半小时），客户端断开 → llama-server 收到断连就把任务取消（日志 `cancel task`）→ 「跑到一半停了」。服务端长活（下载、编译）必须 nohup；客户端长对话被掐就等隧道自动重连后重发。
+- 实例重启（非销毁）也会**换 SSH 端口/主机名**，但 /workspace 和 api.key 都在：抄新端口 → ⑤⑥⑦ 三步恢复；`~/.radeon-api-key` 内容不变不用重建（key 来自 /workspace/api.key）。
 - 实例销毁重建：IP/端口、Jupyter token 都变；/workspace 大概率空 → 从 ① 重跑。
